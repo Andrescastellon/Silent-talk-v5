@@ -1,65 +1,175 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LSC - Minimal funcional</title>
-</head>
-<body>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Traductor LSC — Debug / Toasts</title>
 
-<!-- Minimal UI (no CSS) -->
-<h1>Traductor LSC — Minimal funcional</h1>
-
-<div id="tutorial">
-  <p>Guía rápida: coloca el teléfono estable, buena luz. Pulsa <strong>Comenzar</strong> para activar la cámara.</p>
-  <button id="btnComenzar">Comenzar</button>
-  <button id="btnCerrar">Cerrar y activar</button>
-</div>
-
-<div>
-  <video id="video" autoplay playsinline muted style="width:100%;max-height:360px;background:#000"></video>
-  <canvas id="overlay" style="position:relative;display:block"></canvas>
-</div>
-
-<div>
-  <label>Clase: <select id="letter"></select></label>
-  <label>Mín muestras: <input id="minSamples" type="number" value="20" min="1" style="width:70px"></label>
-  <button id="captureSample" disabled>Capturar</button>
-  <button id="trainBtn" disabled>Entrenar</button>
-  <button id="predictBtn" disabled>Probar</button>
-  <button id="realtimeToggle" disabled>Real-time</button>
-</div>
-
-<div>
-  <button id="saveModelBtn" disabled>Guardar</button>
-  <button id="loadModelBtn">Cargar</button>
-  <button id="exportDataBtn">Exportar</button>
-  <button id="importDataBtn">Importar</button>
-  <button id="clearDataBtn">Borrar</button>
-  <input id="importFile" type="file" accept="application/json" style="display:none"/>
-</div>
-
-<div>
-  <pre id="counts">--</pre>
-  <div id="preview"></div>
-  <div id="log">Esperando acción...</div>
-  <div id="progress"></div>
-  <div id="statusText">Estado: listo</div>
-  <div id="predText">Predicción: —</div>
-</div>
-
-<!-- toast container -->
-<div id="toast" style="position:fixed;left:50%;transform:translateX(-50%);bottom:12px;pointer-events:none"></div>
+<style>
+  :root{
+    --bg:#f5f7fb; --card:#ffffff; --muted:#64748b; --accent:#0ea5a0; --accent-2:#0369a1;
+    --glass: rgba(255,255,255,0.6); --radius:12px; --pad:12px; --shadow: 0 6px 18px rgba(12,18,31,0.06);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#f5f7fb 0%, #eef5fa 100%);color:#07123b}
+  .app{max-width:980px;margin:18px auto;padding:16px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
+  h1{margin:0;font-size:18px}
+  p.lead{margin:0;color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
+  .card{background:var(--card);border-radius:var(--radius);padding:var(--pad);box-shadow:var(--shadow)}
+  .camera-wrap{position:relative;overflow:hidden;border-radius:10px;background:#000;min-height:300px;display:flex;align-items:center;justify-content:center}
+  video#video{width:100%;height:auto;object-fit:cover}
+  canvas#overlay{position:absolute;left:0;top:0;pointer-events:none}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+  select,input[type=number]{border-radius:10px;border:1px solid #e6eef8;padding:9px;background:var(--glass);font-size:14px}
+  button{background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:0;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 6px 16px rgba(3,105,161,0.12)}
+  button.ghost{background:transparent;color:var(--accent-2);border:1px solid #d6ecf1;box-shadow:none}
+  .muted{color:var(--muted);font-size:13px}
+  .counts{font-family:monospace;font-size:13px;color:#0b2b3b;overflow:auto;max-height:120px}
+  .preview-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .thumb{width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #e9f2f7}
+  footer.note{margin-top:12px;color:var(--muted);font-size:13px}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}.camera-wrap{min-height:260px}}
+  .modal-back{position:fixed;inset:0;background:rgba(8,12,20,0.45);display:flex;align-items:center;justify-content:center;z-index:1200}
+  .modal{width:92%;max-width:720px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 18px 40px rgba(3,16,32,0.18)}
+  .tile{width:84px;height:84px;border-radius:8px;background:#f6fbff;display:flex;align-items:center;justify-content:center;font-weight:700;color:#083344}
+  /* toast */
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:1300;pointer-events:none}
+  .toast-item{background:rgba(6,30,37,0.95);color:#fff;padding:10px 14px;border-radius:10px;margin-top:8px;box-shadow:0 6px 18px rgba(3,16,32,0.2);opacity:0;transform:translateY(8px);transition:all .28s ease;pointer-events:auto}
+  .toast-item.show{opacity:1;transform:translateY(0)}
+  .debug-badge{position:fixed;right:18px;top:18px;background:#0ea5a0;color:white;padding:8px 10px;border-radius:10px;box-shadow:0 6px 18px rgba(3,16,32,0.18);z-index:1400;font-weight:700}
+</style>
 
 <!-- libs -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
-<!-- main module -->
-<script type="module">
-/* Minimal functional app with debug toasts */
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="logo">LS</div>
+        <div>
+          <h1>Traductor LSC — alfabeto</h1>
+          <p class="lead">Entrena y prueba desde tu móvil — modo foto (landmarks)</p>
+        </div>
+      </div>
+      <div class="muted">Debug activo • HTTPS requerido</div>
+    </header>
 
+    <div class="grid">
+      <!-- left -->
+      <div>
+        <div class="card">
+          <div class="camera-wrap" aria-hidden="false">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="overlay"></canvas>
+          </div>
+
+          <div class="controls">
+            <label class="muted">Clase</label>
+            <select id="letter"></select>
+            <label class="muted">Mín muestras</label>
+            <input id="minSamples" type="number" value="20" min="1" style="width:86px" />
+            <button id="captureSample" disabled>Capturar</button>
+            <button id="trainBtn" disabled>Entrenar</button>
+            <button id="predictBtn" disabled>Probar</button>
+            <button id="realtimeToggle" class="ghost" disabled>Real-time</button>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:10px">
+            <button id="saveModelBtn" class="ghost" disabled>Guardar</button>
+            <button id="loadModelBtn" class="ghost">Cargar</button>
+            <button id="exportDataBtn" class="ghost">Exportar</button>
+            <button id="importDataBtn" class="ghost">Importar</button>
+            <button id="clearDataBtn" class="ghost">Borrar</button>
+            <input type="file" id="importFile" style="display:none" accept="application/json" />
+          </div>
+
+          <div style="margin-top:12px" class="muted">
+            <span id="log">Abre el tutorial y pulsa "Comenzar" para activar la cámara.</span>
+            <div id="progress" style="margin-top:6px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- right -->
+      <aside class="side">
+        <div class="card status">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Conteos por clase</strong></div>
+            <div class="muted">Selecciona letra para ver miniaturas</div>
+          </div>
+          <div id="counts" class="counts" style="margin-top:8px">--</div>
+
+          <div style="margin-top:8px">
+            <strong>Preview</strong>
+            <div id="preview" class="preview-grid"></div>
+          </div>
+        </div>
+
+        <div class="card status">
+          <div><strong>Consejos rápidos</strong></div>
+          <ol style="margin-top:8px;color:var(--muted);font-size:13px;padding-left:16px">
+            <li>Mantén la mano dentro del encuadre.</li>
+            <li>Usa fondo simple y buena iluminación.</li>
+            <li>Captura variaciones (ángulos/distancia).</li>
+            <li>Si usas dos manos, mantenlas separadas y visibles.</li>
+          </ol>
+        </div>
+
+        <div class="card small">
+          <div><strong>Estado:</strong> <span id="statusText">Listo</span></div>
+          <div style="margin-top:8px"><strong>Predicción:</strong> <span id="predText">—</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="note">
+      <div class="muted">Tutorial integrado: pulsa "Comenzar" en el modal inicial para activar la cámara y ver instrucciones.</div>
+    </footer>
+  </div>
+
+  <!-- tutorial modal -->
+  <div id="tutorialModal" class="modal-back" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h3>Guía rápida — Cómo capturar buenas muestras</h3>
+      <p class="muted">Pulsa <strong>Comenzar</strong> cuando estés listo. El permiso de cámara aparecerá en Chrome.</p>
+
+      <div style="margin-top:12px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="tile">A–Z</div>
+          <div class="tile">Ambas manos</div>
+          <div class="tile">Fotos estáticas</div>
+          <div class="tile">≥ 20 por clase</div>
+        </div>
+
+        <ol style="margin-top:12px;color:var(--muted);font-size:13px;padding-left:18px">
+          <li>Apoya el teléfono o sostén estable.</li>
+          <li>Buena iluminación y fondo simple.</li>
+          <li>Coloca la mano en el centro y toma variaciones.</li>
+          <li>Evita ropa o fondos que oculten la mano.</li>
+        </ol>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+          <button id="btnComenzar">Comenzar</button>
+          <button id="btnCerrar" class="ghost">Cerrar (activar cámara igualmente)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- toast container + debug badge -->
+  <div id="toast"></div>
+  <div id="debugBadge" class="debug-badge" style="display:none">JS iniciado ✔</div>
+
+<script type="module">
+/* ============= MÓDULO PRINCIPAL ============= */
+/* UI refs */
 const letters = Array.from(Array(26)).map((_,i)=>String.fromCharCode(65+i));
 const selectLetter = document.getElementById('letter');
 letters.forEach(l => selectLetter.appendChild(Object.assign(document.createElement('option'), { value: l, text: l })));
@@ -87,61 +197,70 @@ const statusText = document.getElementById('statusText');
 const predText = document.getElementById('predText');
 const minSamplesInput = document.getElementById('minSamples');
 
-const tutorialModal = document.getElementById('tutorial');
+const tutorialModal = document.getElementById('tutorialModal');
 const btnComenzar = document.getElementById('btnComenzar');
 const btnCerrar = document.getElementById('btnCerrar');
 const toastRoot = document.getElementById('toast');
+const debugBadge = document.getElementById('debugBadge');
 
+/* data */
 let samples = {}; letters.forEach(l => samples[l]=[]);
 let model = null;
 const HAND_POINTS = 21, HAND_DIM = HAND_POINTS*3, MAX_HANDS = 2, INPUT_DIM = HAND_DIM*MAX_HANDS;
 const BATCH_SIZE = 32, EPOCHS = 30;
 
-function showToast(text, ms=1200){
-  const div = document.createElement('div');
-  div.textContent = text;
-  div.style.background = 'black';
-  div.style.color = 'white';
-  div.style.padding = '8px 12px';
-  div.style.borderRadius = '8px';
-  div.style.marginTop = '6px';
-  div.style.opacity = '0.95';
-  div.style.pointerEvents = 'auto';
-  toastRoot.appendChild(div);
-  setTimeout(()=> div.remove(), ms);
+/* tiny toast helper */
+function showToast(text, ms=1600){
+  const item = document.createElement('div'); item.className='toast-item'; item.innerText = text;
+  toastRoot.appendChild(item);
+  // show after a tick
+  requestAnimationFrame(()=> item.classList.add('show'));
+  // remove after ms
+  setTimeout(()=> {
+    item.classList.remove('show');
+    setTimeout(()=> item.remove(), 300);
+  }, ms);
 }
 
+/* initial debug show */
+debugBadge.style.display = 'none';
 function jsStarted(){
-  setLog('JavaScript iniciado ✔');
-  console.log('[LSC] JS iniciado ✔');
-  showToast('JavaScript iniciado ✔', 1800);
+  debugBadge.style.display = 'block';
+  showToast('JavaScript iniciado ✔', 2000);
+  console.log('[LSC] JavaScript iniciado ✔');
 }
-jsStarted();
+jsStarted(); // confirm script runs
 
-function setLog(t){ logEl.textContent = t; console.log('[LSC]', t); }
-function setStatus(t){ statusText.textContent = 'Estado: ' + t; }
-function setPred(t){ predText.textContent = 'Predicción: ' + t; }
+function setLog(t){ logEl.innerText = t; console.log('[LSC]', t); }
+function setStatus(t){ statusText.innerText = t; }
+function setPred(t){ predText.innerText = t; }
 
-function updateCounts(){ countsEl.textContent = letters.map(l => `${l}:${samples[l].length}`).join('  |  '); }
+function updateCounts(){
+  countsEl.innerText = letters.map(l => `${l}:${samples[l].length}`).join('  •  ');
+}
 updateCounts();
 
-/* MediaPipe Hands */
-const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+/* ===== MediaPipe Hands ===== */
+const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
 hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
 hands.onResults(onHandsResults);
-
 let cameraInstance = null;
+
 async function startCamera(){
   try {
     if (cameraInstance && cameraInstance.video === video) return;
-    cameraInstance = new Camera(video, { onFrame: async () => { await hands.send({ image: video }); }, width: 640, height: 480 });
+    cameraInstance = new Camera(video, {
+      onFrame: async () => { await hands.send({ image: video }); },
+      width: 640, height: 480
+    });
     await cameraInstance.start();
-    setLog('Cámara lista');
-    enableControls();
-    showToast('Cámara activada', 1200);
-  } catch(e){
-    setLog('Error al iniciar cámara: ' + (e && e.message ? e.message : e));
-    alert('No se pudo activar la cámara. Revisa permisos en Chrome.');
+    setLog('Cámara lista — muéstrame tu mano');
+    enableControlsAfterCamera();
+    showToast('Cámara activada', 1500);
+  } catch (e) {
+    console.error(e);
+    setLog('Error al iniciar la cámara: ' + (e && e.message ? e.message : e));
+    alert('No se pudo activar la cámara. Revisa permisos del navegador.');
   }
 }
 
@@ -150,17 +269,18 @@ function drawLandmarks(multi){
   overlay.height = video.videoHeight || 480;
   ctx.clearRect(0,0,overlay.width,overlay.height);
   if (!multi || multi.length === 0) return;
-  ctx.fillStyle = 'rgba(0,150,130,0.9)';
+  ctx.fillStyle = 'rgba(14,165,160,0.95)';
   for (let h=0; h<multi.length; h++){
-    for (let i=0;i<multi[h].length;i++){
-      const x = multi[h][i].x * overlay.width;
-      const y = multi[h][i].y * overlay.height;
-      ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+    const hand = multi[h];
+    for (let i=0;i<hand.length;i++){
+      const x = hand[i].x * overlay.width;
+      const y = hand[i].y * overlay.height;
+      ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill();
     }
   }
 }
 
-/* normalize multi landmarks -> Float32Array(126) */
+/* normalize two-hand landmarks into Float32Array(126) */
 function normalizeMultiLandmarks(multi){
   if (!multi || multi.length === 0) return null;
   const arr = multi.slice().sort((a,b)=> (a[0].x - b[0].x));
@@ -173,9 +293,7 @@ function normalizeMultiLandmarks(multi){
       const base = hand[0];
       const tmp = [];
       for (let i=0;i<HAND_POINTS;i++){
-        tmp.push(hand[i].x - base.x);
-        tmp.push(hand[i].y - base.y);
-        tmp.push(hand[i].z - base.z);
+        tmp.push(hand[i].x - base.x); tmp.push(hand[i].y - base.y); tmp.push(hand[i].z - base.z);
       }
       let maxAbs = 0; for (const v of tmp) if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
       if (maxAbs === 0) maxAbs = 1e-6;
@@ -189,78 +307,78 @@ let lastVector = null;
 function onHandsResults(results){
   const multi = results.multiHandLandmarks || [];
   drawLandmarks(multi);
-  lastVector = normalizeMultiLandmarks(multi);
+  const v = normalizeMultiLandmarks(multi);
+  lastVector = v;
 }
 
-/* enable controls */
-function enableControls(){
-  captureBtn.disabled = false;
-  trainBtn.disabled = false;
-  predictBtn.disabled = false;
-  realtimeBtn.disabled = false;
-  saveBtn.disabled = false;
+/* enable controls after camera start */
+function enableControlsAfterCamera(){
+  captureBtn.disabled = false; trainBtn.disabled = false; predictBtn.disabled = false;
+  realtimeBtn.disabled = false; saveBtn.disabled = false;
 }
 
-/* touch debug */
-function touchConfirm(name){ showToast(name,900); console.log('[LSC] boton:', name); }
+/* ===== UI interactions with debug toasts ===== */
+function touchConfirm(actionName){
+  showToast(actionName, 900);
+  console.log('[LSC] boton:', actionName);
+}
 
-/* capture */
+/* Capture sample */
 captureBtn.addEventListener('click', () => {
   touchConfirm('Capturar (tocado)');
   const label = selectLetter.value;
-  if (!lastVector){ setLog('No hay landmarks en el frame actual'); return; }
+  if (!lastVector){ setLog('No se detectó mano(s) en el frame actual.'); return; }
   const tmp = document.createElement('canvas');
   const w = Math.min(160, video.videoWidth || 640), h = Math.min(160, video.videoHeight || 480);
-  tmp.width = w; tmp.height = h;
-  const tctx = tmp.getContext('2d');
+  tmp.width = w; tmp.height = h; const tctx = tmp.getContext('2d');
   const sx = Math.max(0, (video.videoWidth - w)/2 || 0), sy = Math.max(0, (video.videoHeight - h)/2 || 0);
   tctx.drawImage(video, sx, sy, w, h, 0, 0, w, h);
-  const dataURL = tmp.toDataURL('image/jpeg',0.75);
+  const dataURL = tmp.toDataURL('image/jpeg', 0.75);
   samples[label].push({ vec: Float32Array.from(lastVector), thumb: dataURL });
   updateCounts(); renderPreviewFor(label);
-  setLog(`Muestra guardada ${label} total ${samples[label].length}`);
+  setLog(`Muestra guardada para ${label} · total ${samples[label].length}`);
 });
 
-/* preview */
-selectLetter.addEventListener('change', ()=> renderPreviewFor(selectLetter.value));
+/* preview rendering */
+selectLetter.addEventListener('change', ()=> { touchConfirm('Cambiar clase'); renderPreviewFor(selectLetter.value); });
 function renderPreviewFor(letter){
   previewEl.innerHTML = '';
   const arr = samples[letter] || [];
   for (let i=0;i<arr.length;i++){
-    const img = document.createElement('img'); img.src = arr[i].thumb; img.width = 64; img.height = 64; img.style.margin='4px';
+    const img = document.createElement('img'); img.src = arr[i].thumb; img.className = 'thumb';
     previewEl.appendChild(img);
   }
 }
 
 /* export/import/clear */
 exportBtn.addEventListener('click', () => {
-  touchConfirm('Exportar');
+  touchConfirm('Exportar muestras');
   const payload = { samples: {} };
-  for (const k of Object.keys(samples)) payload.samples[k] = samples[k].map(s=>({ vec: Array.from(s.vec), thumb: s.thumb }));
+  for (const k of Object.keys(samples)) payload.samples[k] = samples[k].map(s => ({ vec: Array.from(s.vec), thumb: s.thumb }));
   const blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
-  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'lsc_samples.json'; a.click(); URL.revokeObjectURL(url);
-  setLog('Exportado');
-});
-importBtn.addEventListener('click', ()=> { touchConfirm('Importar'); importFile.click(); });
-importFile.addEventListener('change', (ev) => {
-  const f = ev.target.files[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = ()=> {
-    try {
-      const obj = JSON.parse(r.result);
-      if (!obj.samples) { setLog('Archivo inválido'); return; }
-      for (const k of Object.keys(obj.samples)){ if (!samples[k]) samples[k]=[]; for (const s of obj.samples[k]) samples[k].push({ vec: Float32Array.from(s.vec), thumb: s.thumb || '' }); }
-      updateCounts(); renderPreviewFor(selectLetter.value); setLog('Importado');
-    } catch(e){ setLog('Error importando: ' + e); }
-  };
-  r.readAsText(f);
-});
-clearBtn.addEventListener('click', ()=> {
-  touchConfirm('Borrar'); if(!confirm('Borrar todas las muestras?')) return;
-  letters.forEach(l=>samples[l]=[]); updateCounts(); renderPreviewFor(selectLetter.value); setLog('Borradas');
+  const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='lsc_samples.json'; a.click(); URL.revokeObjectURL(url);
+  setLog('Muestras exportadas (descarga iniciada).');
 });
 
-/* build & train */
+importBtn.addEventListener('click', ()=> { touchConfirm('Importar'); importFile.click(); });
+importFile.addEventListener('change', (ev)=> {
+  const f = ev.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=> {
+    try {
+      const obj = JSON.parse(reader.result); if (!obj.samples) { setLog('Archivo inválido.'); return; }
+      for (const k of Object.keys(obj.samples)) { if (!samples[k]) samples[k]=[]; for (const s of obj.samples[k]) samples[k].push({ vec: Float32Array.from(s.vec), thumb: s.thumb || '' }); }
+      updateCounts(); renderPreviewFor(selectLetter.value); setLog('Muestras importadas.');
+    } catch(e){ setLog('Error importando: ' + e); }
+  }; reader.readAsText(f);
+});
+
+clearBtn.addEventListener('click', ()=> {
+  touchConfirm('Borrar todas'); if(!confirm('Borrar todas las muestras de la sesión?')) return;
+  letters.forEach(l=>samples[l]=[]); updateCounts(); renderPreviewFor(selectLetter.value); setLog('Muestras borradas.');
+});
+
+/* ===== Training ===== */
 function buildModel(numClasses){
   const m = tf.sequential();
   m.add(tf.layers.dense({ inputShape: [INPUT_DIM], units: 256, activation:'relu' }));
@@ -271,55 +389,56 @@ function buildModel(numClasses){
   m.compile({ optimizer: tf.train.adam(0.0007), loss: 'categoricalCrossentropy', metrics:['accuracy'] });
   return m;
 }
+
 function prepareDataset(){
   const xs=[], ys=[];
   for (let i=0;i<letters.length;i++){
     const arr = samples[letters[i]];
     for (let j=0;j<arr.length;j++){
-      xs.push(Array.from(arr[j].vec));
-      const one = new Array(letters.length).fill(0); one[i]=1; ys.push(one);
+      xs.push(Array.from(arr[j].vec)); const oneHot = new Array(letters.length).fill(0); oneHot[i]=1; ys.push(oneHot);
     }
   }
   if (xs.length===0) return null;
-  return { x: tf.tensor2d(xs), y: tf.tensor2d(ys) };
+  const xTensor = tf.tensor2d(xs); const yTensor = tf.tensor2d(ys);
+  return { x:xTensor, y:yTensor };
 }
 
 trainBtn.addEventListener('click', async () => {
   touchConfirm('Entrenar');
   const MIN = Math.max(1, parseInt(minSamplesInput.value || '20'));
   const lacking = letters.filter(l => samples[l].length < MIN);
-  if (lacking.length > 0){ setLog('Faltan muestras: ' + lacking.slice(0,6).join(', ')); setStatus('Muestras insuficientes'); return; }
-  const ds = prepareDataset(); if (!ds) { setLog('No hay datos'); return; }
-  model = buildModel(letters.length);
-  setLog('Entrenando...'); setStatus('Entrenando');
-  progressEl.textContent = '';
+  if (lacking.length > 0){ setLog(`No entrenado: faltan muestras (mín ${MIN}) para: ${lacking.slice(0,6).join(', ')}${lacking.length>6? ', ...':''}`); setStatus('Muestras insuficientes'); return; }
+  const ds = prepareDataset(); if (!ds) { setLog('No hay datos.'); return; }
+  model = buildModel(letters.length); setLog('Entrenando en el navegador — esto puede tardar...'); setStatus('Entrenando');
+  progressEl.innerText = '';
   await model.fit(ds.x, ds.y, {
     epochs: EPOCHS,
     batchSize: Math.min(BATCH_SIZE, Math.max(8, Math.floor(ds.x.shape[0]/4))),
     validationSplit: 0.12,
-    callbacks: { onEpochEnd: async (epoch, logs) => { progressEl.textContent = `Epoch ${epoch+1}/${EPOCHS} loss:${logs.loss.toFixed(3)} val_loss:${(logs.val_loss||0).toFixed(3)} acc:${(logs.acc||0).toFixed(3)}`; await tf.nextFrame(); } }
+    callbacks: { onEpochEnd: async (epoch, logs) => { progressEl.innerText = `Epoch ${epoch+1}/${EPOCHS} — loss:${logs.loss.toFixed(3)} val_loss:${(logs.val_loss||0).toFixed(3)} acc:${(logs.acc||0).toFixed(3)}`; await tf.nextFrame(); } }
   });
-  ds.x.dispose(); ds.y.dispose(); setLog('Entrenamiento finalizado'); setStatus('Entrenado'); updateCounts();
+  ds.x.dispose(); ds.y.dispose(); setLog('Entrenamiento finalizado.'); setStatus('Entrenado'); updateCounts();
 });
 
-/* predict */
+/* ===== Predict & real-time ===== */
 predictBtn.addEventListener('click', async () => {
   touchConfirm('Probar');
-  if (!lastVectorAvailable()) { setLog('No landmarks en frame'); return; }
-  if (!model) { try{ model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado'); } catch(e){ setLog('No hay modelo; entrena o carga'); return; } }
+  if (!lastVectorAvailable()) { setLog('No hay landmarks en el frame actual.'); return; }
+  if (!model) { try { model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado desde IndexedDB.'); } catch(e) { setLog('No hay modelo cargado. Entrena o carga uno primero.'); return; } }
   const input = tf.tensor2d([Array.from(lastVector)]); const preds = model.predict(input); const data = await preds.data();
   const idx = data.indexOf(Math.max(...data)); const p = letters[idx];
-  setLog(`Predicción ${p} conf ${(data[idx]*100).toFixed(1)}%`); setPred(`${p} ${(data[idx]*100).toFixed(1)}%`); speak(p);
-  input.dispose(); preds.dispose();
+  setLog(`Predicción: ${p} · conf: ${(data[idx]*100).toFixed(1)}%`);
+  setPred(`${p} (${(data[idx]*100).toFixed(1)}%)`); speak(p); input.dispose(); preds.dispose();
 });
 
 let realtime=false, rtInterval=null;
 function lastVectorAvailable(){ return (typeof lastVector !== 'undefined' && lastVector && lastVector.length === INPUT_DIM); }
+
 realtimeBtn.addEventListener('click', async () => {
-  touchConfirm('Real-time');
-  realtime = !realtime; realtimeBtn.textContent = realtime ? 'Detener real-time' : 'Real-time';
+  touchConfirm('Real-time toggled');
+  realtime = !realtime; realtimeBtn.innerText = realtime ? 'Detener real-time' : 'Real-time'; realtimeBtn.classList.toggle('ghost');
   if (realtime){
-    if (!model){ try{ model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado'); }catch(e){ setLog('No hay modelo en storage'); realtime=false; realtimeBtn.textContent='Real-time'; return; } }
+    if (!model) { try { model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado desde storage para real-time'); } catch(e) { setLog('No hay modelo en storage — entrena antes'); realtime=false; realtimeBtn.innerText='Real-time'; realtimeBtn.classList.toggle('ghost'); return; } }
     rtInterval = setInterval(async () => {
       if (!lastVectorAvailable() || !model) return;
       const input = tf.tensor2d([Array.from(lastVector)]); const preds = model.predict(input); const data = await preds.data();
@@ -330,21 +449,24 @@ realtimeBtn.addEventListener('click', async () => {
   } else { clearInterval(rtInterval); setPred('—'); }
 });
 
-/* save/load */
-saveBtn.addEventListener('click', async () => { touchConfirm('Guardar'); if (!model) { setLog('No hay modelo'); return; } try{ await model.save('indexeddb://lsc-landmarks-model'); setLog('Modelo guardado'); } catch(e){ setLog('Error guardando: '+e); } });
-loadBtn.addEventListener('click', async () => { touchConfirm('Cargar'); try{ model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado'); setStatus('Modelo cargado'); } catch(e){ setLog('No hay modelo guardado'); } });
+/* ===== Save / load model ===== */
+saveBtn.addEventListener('click', async ()=> { touchConfirm('Guardar'); if(!model){ setLog('No hay modelo para guardar.'); return; } try{ await model.save('indexeddb://lsc-landmarks-model'); setLog('Modelo guardado en IndexedDB.'); }catch(e){ setLog('Error guardando: '+e); } });
+loadBtn.addEventListener('click', async ()=> { touchConfirm('Cargar'); try{ model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado desde IndexedDB.'); setStatus('Modelo cargado'); }catch(e){ setLog('No se encontró modelo guardado.'); } });
 
 /* TTS */
-function speak(text){ if (!('speechSynthesis' in window)) return; const u = new SpeechSynthesisUtterance(text); u.lang='es-ES'; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }
+function speak(text){ if (!('speechSynthesis' in window)) return; const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }
 
-/* tutorial handlers */
-btnComenzar.addEventListener('click', async () => { touchConfirm('Comenzar'); tutorialModal.style.display = 'none'; await startCamera(); });
-btnCerrar.addEventListener('click', async () => { touchConfirm('Cerrar tutorial'); tutorialModal.style.display = 'none'; await startCamera(); });
+/* tutorial handlers (Comenzar activa cámara) */
+btnComenzar.addEventListener('click', async ()=> { touchConfirm('Comenzar'); tutorialModal.style.display='none'; await startCamera(); });
+btnCerrar.addEventListener('click', async ()=> { touchConfirm('Cerrar tutorial'); tutorialModal.style.display='none'; await startCamera(); });
 
+/* helpers & cleanup */
 window.addEventListener('beforeunload', ()=> { if (rtInterval) clearInterval(rtInterval); });
 
-/* done */
-</script>
+/* expose lastVector var used in predict/training */
+let lastVector = null;
+/* onHandsResults updates lastVector already above via callback onHandsResults function */
 
+</script>
 </body>
 </html>
