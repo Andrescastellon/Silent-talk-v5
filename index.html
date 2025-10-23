@@ -35,438 +35,171 @@
   .modal-back{position:fixed;inset:0;background:rgba(8,12,20,0.45);display:flex;align-items:center;justify-content:center;z-index:1200}
   .modal{width:92%;max-width:720px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 18px 40px rgba(3,16,32,0.18)}
   .tile{width:84px;height:84px;border-radius:8px;background:#f6fbff;display:flex;align-items:center;justify-content:center;font-weight:700;color:#083344}
-  /* toast */
   #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:1300;pointer-events:none}
   .toast-item{background:rgba(6,30,37,0.95);color:#fff;padding:10px 14px;border-radius:10px;margin-top:8px;box-shadow:0 6px 18px rgba(3,16,32,0.2);opacity:0;transform:translateY(8px);transition:all .28s ease;pointer-events:auto}
   .toast-item.show{opacity:1;transform:translateY(0)}
   .debug-badge{position:fixed;right:18px;top:18px;background:#0ea5a0;color:white;padding:8px 10px;border-radius:10px;box-shadow:0 6px 18px rgba(3,16,32,0.18);z-index:1400;font-weight:700}
 </style>
 
-<!-- libs -->
+<!-- librerías -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
 </head>
+
 <body>
-  <div class="app">
-    <header>
-      <div style="display:flex;gap:12px;align-items:center">
-        <div class="logo">LS</div>
-        <div>
-          <h1>Traductor LSC — alfabeto</h1>
-          <p class="lead">Entrena y prueba desde tu móvil — modo foto (landmarks)</p>
-        </div>
-      </div>
-      <div class="muted">Debug activo • HTTPS requerido</div>
-    </header>
-
-    <div class="grid">
-      <!-- left -->
+<div class="app">
+  <header>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div class="logo">LS</div>
       <div>
-        <div class="card">
-          <div class="camera-wrap" aria-hidden="false">
-            <video id="video" autoplay playsinline muted></video>
-            <canvas id="overlay"></canvas>
-          </div>
-
-          <div class="controls">
-            <label class="muted">Clase</label>
-            <select id="letter"></select>
-            <label class="muted">Mín muestras</label>
-            <input id="minSamples" type="number" value="20" min="1" style="width:86px" />
-            <button id="captureSample" disabled>Capturar</button>
-            <button id="trainBtn" disabled>Entrenar</button>
-            <button id="predictBtn" disabled>Probar</button>
-            <button id="realtimeToggle" class="ghost" disabled>Real-time</button>
-          </div>
-
-          <div style="display:flex;gap:10px;margin-top:10px">
-            <button id="saveModelBtn" class="ghost" disabled>Guardar</button>
-            <button id="loadModelBtn" class="ghost">Cargar</button>
-            <button id="exportDataBtn" class="ghost">Exportar</button>
-            <button id="importDataBtn" class="ghost">Importar</button>
-            <button id="clearDataBtn" class="ghost">Borrar</button>
-            <input type="file" id="importFile" style="display:none" accept="application/json" />
-          </div>
-
-          <div style="margin-top:12px" class="muted">
-            <span id="log">Abre el tutorial y pulsa "Comenzar" para activar la cámara.</span>
-            <div id="progress" style="margin-top:6px"></div>
-          </div>
-        </div>
+        <h1>Traductor LSC — alfabeto</h1>
+        <p class="lead">Entrena y prueba desde tu móvil</p>
       </div>
-
-      <!-- right -->
-      <aside class="side">
-        <div class="card status">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><strong>Conteos por clase</strong></div>
-            <div class="muted">Selecciona letra para ver miniaturas</div>
-          </div>
-          <div id="counts" class="counts" style="margin-top:8px">--</div>
-
-          <div style="margin-top:8px">
-            <strong>Preview</strong>
-            <div id="preview" class="preview-grid"></div>
-          </div>
-        </div>
-
-        <div class="card status">
-          <div><strong>Consejos rápidos</strong></div>
-          <ol style="margin-top:8px;color:var(--muted);font-size:13px;padding-left:16px">
-            <li>Mantén la mano dentro del encuadre.</li>
-            <li>Usa fondo simple y buena iluminación.</li>
-            <li>Captura variaciones (ángulos/distancia).</li>
-            <li>Si usas dos manos, mantenlas separadas y visibles.</li>
-          </ol>
-        </div>
-
-        <div class="card small">
-          <div><strong>Estado:</strong> <span id="statusText">Listo</span></div>
-          <div style="margin-top:8px"><strong>Predicción:</strong> <span id="predText">—</span></div>
-        </div>
-      </aside>
     </div>
+    <div class="muted">Debug activo • HTTPS requerido</div>
+  </header>
 
-    <footer class="note">
-      <div class="muted">Tutorial integrado: pulsa "Comenzar" en el modal inicial para activar la cámara y ver instrucciones.</div>
-    </footer>
-  </div>
-
-  <!-- tutorial modal -->
-  <div id="tutorialModal" class="modal-back" role="dialog" aria-modal="true">
-    <div class="modal">
-      <h3>Guía rápida — Cómo capturar buenas muestras</h3>
-      <p class="muted">Pulsa <strong>Comenzar</strong> cuando estés listo. El permiso de cámara aparecerá en Chrome.</p>
-
-      <div style="margin-top:12px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <div class="tile">A–Z</div>
-          <div class="tile">Ambas manos</div>
-          <div class="tile">Fotos estáticas</div>
-          <div class="tile">≥ 20 por clase</div>
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="camera-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="overlay"></canvas>
         </div>
 
-        <ol style="margin-top:12px;color:var(--muted);font-size:13px;padding-left:18px">
-          <li>Apoya el teléfono o sostén estable.</li>
-          <li>Buena iluminación y fondo simple.</li>
-          <li>Coloca la mano en el centro y toma variaciones.</li>
-          <li>Evita ropa o fondos que oculten la mano.</li>
-        </ol>
+        <div class="controls">
+          <label class="muted">Clase</label>
+          <select id="letter"></select>
+          <label class="muted">Mín muestras</label>
+          <input id="minSamples" type="number" value="20" min="1" style="width:86px" />
+          <button id="captureSample" disabled>Capturar</button>
+          <button id="trainBtn" disabled>Entrenar</button>
+          <button id="predictBtn" disabled>Probar</button>
+          <button id="realtimeToggle" class="ghost" disabled>Real-time</button>
+        </div>
 
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
-          <button id="btnComenzar">Comenzar</button>
-          <button id="btnCerrar" class="ghost">Cerrar (activar cámara igualmente)</button>
+        <div style="display:flex;gap:10px;margin-top:10px">
+          <button id="saveModelBtn" class="ghost" disabled>Guardar</button>
+          <button id="loadModelBtn" class="ghost">Cargar</button>
+          <button id="exportDataBtn" class="ghost">Exportar</button>
+          <button id="importDataBtn" class="ghost">Importar</button>
+          <button id="clearDataBtn" class="ghost">Borrar</button>
+          <input type="file" id="importFile" style="display:none" accept="application/json" />
+        </div>
+
+        <div style="margin-top:12px" class="muted">
+          <span id="log">Pulsa “Comenzar” para activar la cámara.</span>
+          <div id="progress" style="margin-top:6px"></div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- toast container + debug badge -->
-  <div id="toast"></div>
-  <div id="debugBadge" class="debug-badge" style="display:none">JS iniciado ✔</div>
+    <aside class="side">
+      <div class="card">
+        <strong>Conteos por clase</strong>
+        <div id="counts" class="counts" style="margin-top:8px">--</div>
+        <div style="margin-top:8px"><strong>Preview</strong>
+          <div id="preview" class="preview-grid"></div>
+        </div>
+      </div>
+
+      <div class="card"><strong>Predicción:</strong> <span id="predText">—</span></div>
+    </aside>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="debugBadge" class="debug-badge" style="display:none">JS iniciado ✔</div>
 
 <script type="module">
-/* ============= MÓDULO PRINCIPAL ============= */
-/* UI refs */
-const letters = Array.from(Array(26)).map((_,i)=>String.fromCharCode(65+i));
-const selectLetter = document.getElementById('letter');
-letters.forEach(l => selectLetter.appendChild(Object.assign(document.createElement('option'), { value: l, text: l })));
+/* ====== VARIABLES ====== */
+const letters = Array.from({length:26},(_,i)=>String.fromCharCode(65+i));
+const sel=document.getElementById('letter'); letters.forEach(l=>sel.append(new Option(l,l)));
+const v=document.getElementById('video'), o=document.getElementById('overlay'), c=o.getContext('2d');
+let samples={}; letters.forEach(l=>samples[l]=[]);
+let model=null, lastVector=null, realtime=false;
+const log=t=>{document.getElementById('log').innerText=t;console.log('[LSC]',t)};
+const toastRoot=document.getElementById('toast');
+function showToast(t,ms=1600){if(toastRoot.children.length>3)toastRoot.removeChild(toastRoot.firstChild);
+  const d=document.createElement('div');d.className='toast-item';d.innerText=t;toastRoot.append(d);
+  requestAnimationFrame(()=>d.classList.add('show'));setTimeout(()=>{d.classList.remove('show');setTimeout(()=>d.remove(),300)},ms);}
+document.getElementById('debugBadge').style.display='block';
 
-const video = document.getElementById('video');
-const overlay = document.getElementById('overlay');
-const ctx = overlay.getContext('2d');
+/* ====== MEDIAPIPE ====== */
+const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+hands.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:0.6,minTrackingConfidence:0.6});
+hands.onResults(r=>{const m=r.multiHandLandmarks||[];draw(m);lastVector=norm(m);});
+const cam=new Camera(v,{onFrame:async()=>{await hands.send({image:v});},width:640,height:480});
+cam.start().then(()=>{showToast('Cámara lista');['captureSample','trainBtn','predictBtn','realtimeToggle'].forEach(id=>document.getElementById(id).disabled=false);});
 
-const captureBtn = document.getElementById('captureSample');
-const trainBtn = document.getElementById('trainBtn');
-const predictBtn = document.getElementById('predictBtn');
-const realtimeBtn = document.getElementById('realtimeToggle');
-const saveBtn = document.getElementById('saveModelBtn');
-const loadBtn = document.getElementById('loadModelBtn');
-const exportBtn = document.getElementById('exportDataBtn');
-const importBtn = document.getElementById('importDataBtn');
-const importFile = document.getElementById('importFile');
-const clearBtn = document.getElementById('clearDataBtn');
-
-const countsEl = document.getElementById('counts');
-const previewEl = document.getElementById('preview');
-const logEl = document.getElementById('log');
-const progressEl = document.getElementById('progress');
-const statusText = document.getElementById('statusText');
-const predText = document.getElementById('predText');
-const minSamplesInput = document.getElementById('minSamples');
-
-const tutorialModal = document.getElementById('tutorialModal');
-const btnComenzar = document.getElementById('btnComenzar');
-const btnCerrar = document.getElementById('btnCerrar');
-const toastRoot = document.getElementById('toast');
-const debugBadge = document.getElementById('debugBadge');
-
-/* data */
-let samples = {}; letters.forEach(l => samples[l]=[]);
-let model = null;
-const HAND_POINTS = 21, HAND_DIM = HAND_POINTS*3, MAX_HANDS = 2, INPUT_DIM = HAND_DIM*MAX_HANDS;
-const BATCH_SIZE = 32, EPOCHS = 30;
-
-/* tiny toast helper */
-function showToast(text, ms=1600){
-  const item = document.createElement('div'); item.className='toast-item'; item.innerText = text;
-  toastRoot.appendChild(item);
-  // show after a tick
-  requestAnimationFrame(()=> item.classList.add('show'));
-  // remove after ms
-  setTimeout(()=> {
-    item.classList.remove('show');
-    setTimeout(()=> item.remove(), 300);
-  }, ms);
+function draw(m){o.width=v.videoWidth||640;o.height=v.videoHeight||480;c.clearRect(0,0,o.width,o.height);
+  c.fillStyle='rgba(14,165,160,0.9)';
+  m.forEach(h=>h.forEach(p=>{c.beginPath();c.arc(p.x*o.width,p.y*o.height,6,0,Math.PI*2);c.fill();}));
 }
+function norm(m){if(!m.length)return null;const arr=m.slice().sort((a,b)=>a[0].x-b[0].x);const res=[];
+  for(let h=0;h<2;h++){const hand=arr[h];if(!hand){res.push(...Array(63).fill(0));continue;}
+    const base=hand[0];let tmp=[];hand.forEach(p=>tmp.push(p.x-base.x,p.y-base.y,p.z-base.z));
+    let max=Math.max(...tmp.map(Math.abs))||1;res.push(...tmp.map(v=>v/max));}return Float32Array.from(res);}
 
-/* initial debug show */
-debugBadge.style.display = 'none';
-function jsStarted(){
-  debugBadge.style.display = 'block';
-  showToast('JavaScript iniciado ✔', 2000);
-  console.log('[LSC] JavaScript iniciado ✔');
-}
-jsStarted(); // confirm script runs
+/* ====== CAPTURA ====== */
+document.getElementById('captureSample').onclick=()=>{
+  if(!lastVector){log('No se detectó mano');return;}
+  const L=sel.value;samples[L].push(Array.from(lastVector));
+  document.getElementById('counts').innerText=letters.map(l=>`${l}:${samples[l].length}`).join(' | ');
+  showToast(`Muestra capturada ${L}`);
+};
 
-function setLog(t){ logEl.innerText = t; console.log('[LSC]', t); }
-function setStatus(t){ statusText.innerText = t; }
-function setPred(t){ predText.innerText = t; }
+/* ====== ENTRENAR ====== */
+document.getElementById('trainBtn').onclick=async()=>{
+  let xs=[],ys=[];letters.forEach((l,i)=>samples[l].forEach(v=>{xs.push(v);ys.push(i);}));
+  if(xs.length===0)return alert('No hay datos');
+  const X=tf.tensor2d(xs);const Y=tf.oneHot(tf.tensor1d(ys,'int32'),letters.length);
+  model=tf.sequential({layers:[
+    tf.layers.dense({units:128,activation:'relu',inputShape:[xs[0].length]}),
+    tf.layers.dropout({rate:0.25}),
+    tf.layers.dense({units:64,activation:'relu'}),
+    tf.layers.dense({units:letters.length,activation:'softmax'})
+  ]});
+  model.compile({optimizer:'adam',loss:'categoricalCrossentropy',metrics:['accuracy']});
+  log('Entrenando...');
+  await model.fit(X,Y,{epochs:20,batchSize:32,shuffle:true,
+    callbacks:{onEpochEnd:(e,l)=>{document.getElementById('progress').innerText=
+      `Epoch ${e+1}: loss=${l.loss.toFixed(3)} acc=${(l.acc||l.accuracy||0).toFixed(3)}`;}});
+  showToast('Entrenamiento finalizado');log('Modelo listo');
+};
 
-function updateCounts(){
-  countsEl.innerText = letters.map(l => `${l}:${samples[l].length}`).join('  •  ');
-}
-updateCounts();
+/* ====== PREDICCIÓN ====== */
+document.getElementById('predictBtn').onclick=()=>{
+  if(!model||!lastVector)return;
+  const p=model.predict(tf.tensor2d([Array.from(lastVector)])).arraySync()[0];
+  const i=p.indexOf(Math.max(...p));document.getElementById('predText').innerText=letters[i];
+};
+document.getElementById('realtimeToggle').onclick=()=>{
+  realtime=!realtime;showToast(realtime?'Real-time ON':'Real-time OFF');
+  if(realtime)loopPred();
+};
+async function loopPred(){if(!realtime)return;await tf.nextFrame();
+  if(model&&lastVector){const p=model.predict(tf.tensor2d([Array.from(lastVector)])).arraySync()[0];
+  const i=p.indexOf(Math.max(...p));document.getElementById('predText').innerText=letters[i];}
+  requestAnimationFrame(loopPred);}
 
-/* ===== MediaPipe Hands ===== */
-const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
-hands.onResults(onHandsResults);
-let cameraInstance = null;
+/* ====== GUARDAR / CARGAR ====== */
+document.getElementById('saveModelBtn').onclick=async()=>{if(model){await model.save('downloads://lsc-model');showToast('Modelo guardado');}};
+document.getElementById('loadModelBtn').onclick=async()=>{try{model=await tf.loadLayersModel('indexeddb://lsc-model');showToast('Modelo cargado');}catch(e){alert('No se encontró modelo guardado');}};
 
-async function startCamera(){
-  try {
-    if (cameraInstance && cameraInstance.video === video) return;
-    cameraInstance = new Camera(video, {
-      onFrame: async () => { await hands.send({ image: video }); },
-      width: 640, height: 480
-    });
-    await cameraInstance.start();
-    setLog('Cámara lista — muéstrame tu mano');
-    enableControlsAfterCamera();
-    showToast('Cámara activada', 1500);
-  } catch (e) {
-    console.error(e);
-    setLog('Error al iniciar la cámara: ' + (e && e.message ? e.message : e));
-    alert('No se pudo activar la cámara. Revisa permisos del navegador.');
-  }
-}
-
-function drawLandmarks(multi){
-  overlay.width = video.videoWidth || 640;
-  overlay.height = video.videoHeight || 480;
-  ctx.clearRect(0,0,overlay.width,overlay.height);
-  if (!multi || multi.length === 0) return;
-  ctx.fillStyle = 'rgba(14,165,160,0.95)';
-  for (let h=0; h<multi.length; h++){
-    const hand = multi[h];
-    for (let i=0;i<hand.length;i++){
-      const x = hand[i].x * overlay.width;
-      const y = hand[i].y * overlay.height;
-      ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill();
-    }
-  }
-}
-
-/* normalize two-hand landmarks into Float32Array(126) */
-function normalizeMultiLandmarks(multi){
-  if (!multi || multi.length === 0) return null;
-  const arr = multi.slice().sort((a,b)=> (a[0].x - b[0].x));
-  const combined = [];
-  for (let h=0; h<MAX_HANDS; h++){
-    const hand = arr[h];
-    if (!hand){
-      for (let i=0;i<HAND_DIM;i++) combined.push(0);
-    } else {
-      const base = hand[0];
-      const tmp = [];
-      for (let i=0;i<HAND_POINTS;i++){
-        tmp.push(hand[i].x - base.x); tmp.push(hand[i].y - base.y); tmp.push(hand[i].z - base.z);
-      }
-      let maxAbs = 0; for (const v of tmp) if (Math.abs(v) > maxAbs) maxAbs = Math.abs(v);
-      if (maxAbs === 0) maxAbs = 1e-6;
-      for (const v of tmp) combined.push(v / maxAbs);
-    }
-  }
-  return Float32Array.from(combined);
-}
-
-let lastVector = null;
-function onHandsResults(results){
-  const multi = results.multiHandLandmarks || [];
-  drawLandmarks(multi);
-  const v = normalizeMultiLandmarks(multi);
-  lastVector = v;
-}
-
-/* enable controls after camera start */
-function enableControlsAfterCamera(){
-  captureBtn.disabled = false; trainBtn.disabled = false; predictBtn.disabled = false;
-  realtimeBtn.disabled = false; saveBtn.disabled = false;
-}
-
-/* ===== UI interactions with debug toasts ===== */
-function touchConfirm(actionName){
-  showToast(actionName, 900);
-  console.log('[LSC] boton:', actionName);
-}
-
-/* Capture sample */
-captureBtn.addEventListener('click', () => {
-  touchConfirm('Capturar (tocado)');
-  const label = selectLetter.value;
-  if (!lastVector){ setLog('No se detectó mano(s) en el frame actual.'); return; }
-  const tmp = document.createElement('canvas');
-  const w = Math.min(160, video.videoWidth || 640), h = Math.min(160, video.videoHeight || 480);
-  tmp.width = w; tmp.height = h; const tctx = tmp.getContext('2d');
-  const sx = Math.max(0, (video.videoWidth - w)/2 || 0), sy = Math.max(0, (video.videoHeight - h)/2 || 0);
-  tctx.drawImage(video, sx, sy, w, h, 0, 0, w, h);
-  const dataURL = tmp.toDataURL('image/jpeg', 0.75);
-  samples[label].push({ vec: Float32Array.from(lastVector), thumb: dataURL });
-  updateCounts(); renderPreviewFor(label);
-  setLog(`Muestra guardada para ${label} · total ${samples[label].length}`);
-});
-
-/* preview rendering */
-selectLetter.addEventListener('change', ()=> { touchConfirm('Cambiar clase'); renderPreviewFor(selectLetter.value); });
-function renderPreviewFor(letter){
-  previewEl.innerHTML = '';
-  const arr = samples[letter] || [];
-  for (let i=0;i<arr.length;i++){
-    const img = document.createElement('img'); img.src = arr[i].thumb; img.className = 'thumb';
-    previewEl.appendChild(img);
-  }
-}
-
-/* export/import/clear */
-exportBtn.addEventListener('click', () => {
-  touchConfirm('Exportar muestras');
-  const payload = { samples: {} };
-  for (const k of Object.keys(samples)) payload.samples[k] = samples[k].map(s => ({ vec: Array.from(s.vec), thumb: s.thumb }));
-  const blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
-  const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='lsc_samples.json'; a.click(); URL.revokeObjectURL(url);
-  setLog('Muestras exportadas (descarga iniciada).');
-});
-
-importBtn.addEventListener('click', ()=> { touchConfirm('Importar'); importFile.click(); });
-importFile.addEventListener('change', (ev)=> {
-  const f = ev.target.files[0]; if (!f) return;
-  const reader = new FileReader();
-  reader.onload = ()=> {
-    try {
-      const obj = JSON.parse(reader.result); if (!obj.samples) { setLog('Archivo inválido.'); return; }
-      for (const k of Object.keys(obj.samples)) { if (!samples[k]) samples[k]=[]; for (const s of obj.samples[k]) samples[k].push({ vec: Float32Array.from(s.vec), thumb: s.thumb || '' }); }
-      updateCounts(); renderPreviewFor(selectLetter.value); setLog('Muestras importadas.');
-    } catch(e){ setLog('Error importando: ' + e); }
-  }; reader.readAsText(f);
-});
-
-clearBtn.addEventListener('click', ()=> {
-  touchConfirm('Borrar todas'); if(!confirm('Borrar todas las muestras de la sesión?')) return;
-  letters.forEach(l=>samples[l]=[]); updateCounts(); renderPreviewFor(selectLetter.value); setLog('Muestras borradas.');
-});
-
-/* ===== Training ===== */
-function buildModel(numClasses){
-  const m = tf.sequential();
-  m.add(tf.layers.dense({ inputShape: [INPUT_DIM], units: 256, activation:'relu' }));
-  m.add(tf.layers.dropout({ rate: 0.4 }));
-  m.add(tf.layers.dense({ units: 128, activation:'relu' }));
-  m.add(tf.layers.dropout({ rate: 0.2 }));
-  m.add(tf.layers.dense({ units: numClasses, activation:'softmax' }));
-  m.compile({ optimizer: tf.train.adam(0.0007), loss: 'categoricalCrossentropy', metrics:['accuracy'] });
-  return m;
-}
-
-function prepareDataset(){
-  const xs=[], ys=[];
-  for (let i=0;i<letters.length;i++){
-    const arr = samples[letters[i]];
-    for (let j=0;j<arr.length;j++){
-      xs.push(Array.from(arr[j].vec)); const oneHot = new Array(letters.length).fill(0); oneHot[i]=1; ys.push(oneHot);
-    }
-  }
-  if (xs.length===0) return null;
-  const xTensor = tf.tensor2d(xs); const yTensor = tf.tensor2d(ys);
-  return { x:xTensor, y:yTensor };
-}
-
-trainBtn.addEventListener('click', async () => {
-  touchConfirm('Entrenar');
-  const MIN = Math.max(1, parseInt(minSamplesInput.value || '20'));
-  const lacking = letters.filter(l => samples[l].length < MIN);
-  if (lacking.length > 0){ setLog(`No entrenado: faltan muestras (mín ${MIN}) para: ${lacking.slice(0,6).join(', ')}${lacking.length>6? ', ...':''}`); setStatus('Muestras insuficientes'); return; }
-  const ds = prepareDataset(); if (!ds) { setLog('No hay datos.'); return; }
-  model = buildModel(letters.length); setLog('Entrenando en el navegador — esto puede tardar...'); setStatus('Entrenando');
-  progressEl.innerText = '';
-  await model.fit(ds.x, ds.y, {
-    epochs: EPOCHS,
-    batchSize: Math.min(BATCH_SIZE, Math.max(8, Math.floor(ds.x.shape[0]/4))),
-    validationSplit: 0.12,
-    callbacks: { onEpochEnd: async (epoch, logs) => { progressEl.innerText = `Epoch ${epoch+1}/${EPOCHS} — loss:${logs.loss.toFixed(3)} val_loss:${(logs.val_loss||0).toFixed(3)} acc:${(logs.acc||0).toFixed(3)}`; await tf.nextFrame(); } }
-  });
-  ds.x.dispose(); ds.y.dispose(); setLog('Entrenamiento finalizado.'); setStatus('Entrenado'); updateCounts();
-});
-
-/* ===== Predict & real-time ===== */
-predictBtn.addEventListener('click', async () => {
-  touchConfirm('Probar');
-  if (!lastVectorAvailable()) { setLog('No hay landmarks en el frame actual.'); return; }
-  if (!model) { try { model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado desde IndexedDB.'); } catch(e) { setLog('No hay modelo cargado. Entrena o carga uno primero.'); return; } }
-  const input = tf.tensor2d([Array.from(lastVector)]); const preds = model.predict(input); const data = await preds.data();
-  const idx = data.indexOf(Math.max(...data)); const p = letters[idx];
-  setLog(`Predicción: ${p} · conf: ${(data[idx]*100).toFixed(1)}%`);
-  setPred(`${p} (${(data[idx]*100).toFixed(1)}%)`); speak(p); input.dispose(); preds.dispose();
-});
-
-let realtime=false, rtInterval=null;
-function lastVectorAvailable(){ return (typeof lastVector !== 'undefined' && lastVector && lastVector.length === INPUT_DIM); }
-
-realtimeBtn.addEventListener('click', async () => {
-  touchConfirm('Real-time toggled');
-  realtime = !realtime; realtimeBtn.innerText = realtime ? 'Detener real-time' : 'Real-time'; realtimeBtn.classList.toggle('ghost');
-  if (realtime){
-    if (!model) { try { model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado desde storage para real-time'); } catch(e) { setLog('No hay modelo en storage — entrena antes'); realtime=false; realtimeBtn.innerText='Real-time'; realtimeBtn.classList.toggle('ghost'); return; } }
-    rtInterval = setInterval(async () => {
-      if (!lastVectorAvailable() || !model) return;
-      const input = tf.tensor2d([Array.from(lastVector)]); const preds = model.predict(input); const data = await preds.data();
-      const idx = data.indexOf(Math.max(...data)); const p = letters[idx];
-      setLog(`Real-time → ${p} ${(data[idx]*100).toFixed(1)}%`); setPred(`${p} ${(data[idx]*100).toFixed(1)}%`);
-      input.dispose(); preds.dispose();
-    }, 500);
-  } else { clearInterval(rtInterval); setPred('—'); }
-});
-
-/* ===== Save / load model ===== */
-saveBtn.addEventListener('click', async ()=> { touchConfirm('Guardar'); if(!model){ setLog('No hay modelo para guardar.'); return; } try{ await model.save('indexeddb://lsc-landmarks-model'); setLog('Modelo guardado en IndexedDB.'); }catch(e){ setLog('Error guardando: '+e); } });
-loadBtn.addEventListener('click', async ()=> { touchConfirm('Cargar'); try{ model = await tf.loadLayersModel('indexeddb://lsc-landmarks-model'); setLog('Modelo cargado desde IndexedDB.'); setStatus('Modelo cargado'); }catch(e){ setLog('No se encontró modelo guardado.'); } });
-
-/* TTS */
-function speak(text){ if (!('speechSynthesis' in window)) return; const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }
-
-/* tutorial handlers (Comenzar activa cámara) */
-btnComenzar.addEventListener('click', async ()=> { touchConfirm('Comenzar'); tutorialModal.style.display='none'; await startCamera(); });
-btnCerrar.addEventListener('click', async ()=> { touchConfirm('Cerrar tutorial'); tutorialModal.style.display='none'; await startCamera(); });
-
-/* helpers & cleanup */
-window.addEventListener('beforeunload', ()=> { if (rtInterval) clearInterval(rtInterval); });
-
-/* expose lastVector var used in predict/training */
-let lastVector = null;
-/* onHandsResults updates lastVector already above via callback onHandsResults function */
-
+/* ====== EXPORTAR / IMPORTAR ====== */
+document.getElementById('exportDataBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify(samples)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='datos-lsc.json';a.click();
+};
+document.getElementById('importDataBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=e=>{
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();reader.onload=()=>{samples=JSON.parse(reader.result);showToast('Datos importados');};
+  reader.readAsText(file);
+};
+document.getElementById('clearDataBtn').onclick=()=>{if(confirm('¿Borrar todos los datos?')){letters.forEach(l=>samples[l]=[]);showToast('Datos borrados');}};
 </script>
 </body>
 </html>
