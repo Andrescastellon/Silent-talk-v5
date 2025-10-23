@@ -113,7 +113,6 @@
 <div id="debugBadge" class="debug-badge" style="display:none">JS iniciado ✔</div>
 
 <script type="module">
-/* ====== VARIABLES ====== */
 const letters = Array.from({length:26},(_,i)=>String.fromCharCode(65+i));
 const sel=document.getElementById('letter'); letters.forEach(l=>sel.append(new Option(l,l)));
 const v=document.getElementById('video'), o=document.getElementById('overlay'), c=o.getContext('2d');
@@ -137,12 +136,18 @@ function draw(m){o.width=v.videoWidth||640;o.height=v.videoHeight||480;c.clearRe
   c.fillStyle='rgba(14,165,160,0.9)';
   m.forEach(h=>h.forEach(p=>{c.beginPath();c.arc(p.x*o.width,p.y*o.height,6,0,Math.PI*2);c.fill();}));
 }
-function norm(m){if(!m.length)return null;const arr=m.slice().sort((a,b)=>a[0].x-b[0].x);const res=[];
+
+/* ✅ CORRECCIÓN 1: normalización robusta */
+function norm(m){if(!m.length)return null;
+  const arr=m.slice().sort((a,b)=>a[0].x-b[0].x);const res=[];
   for(let h=0;h<2;h++){const hand=arr[h];if(!hand){res.push(...Array(63).fill(0));continue;}
     const base=hand[0];let tmp=[];hand.forEach(p=>tmp.push(p.x-base.x,p.y-base.y,p.z-base.z));
-    let max=Math.max(...tmp.map(Math.abs))||1;res.push(...tmp.map(v=>v/max));}return Float32Array.from(res);}
+    const scale=Math.max(1e-6,Math.max(...tmp.map(Math.abs))); // evita división por cero
+    res.push(...tmp.map(v=>v/scale));}
+  return Float32Array.from(res);
+}
 
-/* ====== CAPTURA ====== */
+/* CAPTURA */
 document.getElementById('captureSample').onclick=()=>{
   if(!lastVector){log('No se detectó mano');return;}
   const L=sel.value;samples[L].push(Array.from(lastVector));
@@ -150,7 +155,7 @@ document.getElementById('captureSample').onclick=()=>{
   showToast(`Muestra capturada ${L}`);
 };
 
-/* ====== ENTRENAR ====== */
+/* ENTRENAR */
 document.getElementById('trainBtn').onclick=async()=>{
   let xs=[],ys=[];letters.forEach((l,i)=>samples[l].forEach(v=>{xs.push(v);ys.push(i);}));
   if(xs.length===0)return alert('No hay datos');
@@ -167,9 +172,10 @@ document.getElementById('trainBtn').onclick=async()=>{
     callbacks:{onEpochEnd:(e,l)=>{document.getElementById('progress').innerText=
       `Epoch ${e+1}: loss=${l.loss.toFixed(3)} acc=${(l.acc||l.accuracy||0).toFixed(3)}`;}});
   showToast('Entrenamiento finalizado');log('Modelo listo');
+  document.getElementById('saveModelBtn').disabled=false; // ✅ habilitar guardar
 };
 
-/* ====== PREDICCIÓN ====== */
+/* PREDICCIÓN */
 document.getElementById('predictBtn').onclick=()=>{
   if(!model||!lastVector)return;
   const p=model.predict(tf.tensor2d([Array.from(lastVector)])).arraySync()[0];
@@ -184,11 +190,26 @@ async function loopPred(){if(!realtime)return;await tf.nextFrame();
   const i=p.indexOf(Math.max(...p));document.getElementById('predText').innerText=letters[i];}
   requestAnimationFrame(loopPred);}
 
-/* ====== GUARDAR / CARGAR ====== */
-document.getElementById('saveModelBtn').onclick=async()=>{if(model){await model.save('downloads://lsc-model');showToast('Modelo guardado');}};
-document.getElementById('loadModelBtn').onclick=async()=>{try{model=await tf.loadLayersModel('indexeddb://lsc-model');showToast('Modelo cargado');}catch(e){alert('No se encontró modelo guardado');}};
+/* ✅ CORRECCIÓN 2 y 3: Guardar/Cargar modelo de forma estable */
+document.getElementById('saveModelBtn').onclick=async()=>{
+  if(!model)return alert('No hay modelo para guardar');
+  try{
+    await model.save('indexeddb://lsc-model');
+    showToast('Modelo guardado en navegador');
+  }catch(e){console.error(e);alert('Error al guardar el modelo');}
+};
 
-/* ====== EXPORTAR / IMPORTAR ====== */
+document.getElementById('loadModelBtn').onclick=async()=>{
+  try{
+    model=await tf.loadLayersModel('indexeddb://lsc-model');
+    showToast('Modelo cargado desde navegador');
+    document.getElementById('saveModelBtn').disabled=false;
+  }catch(e){
+    alert('No se encontró modelo guardado en el navegador');
+  }
+};
+
+/* EXPORTAR / IMPORTAR */
 document.getElementById('exportDataBtn').onclick=()=>{
   const blob=new Blob([JSON.stringify(samples)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='datos-lsc.json';a.click();
