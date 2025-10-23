@@ -1,226 +1,159 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Traductor LSC — Debug / Toasts</title>
-
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traductor LSC - WebApp</title>
 <style>
-  :root{
-    --bg:#f5f7fb; --card:#ffffff; --muted:#64748b; --accent:#0ea5a0; --accent-2:#0369a1;
-    --glass: rgba(255,255,255,0.6); --radius:12px; --pad:12px; --shadow: 0 6px 18px rgba(12,18,31,0.06);
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
-  }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#f5f7fb 0%, #eef5fa 100%);color:#07123b}
-  .app{max-width:980px;margin:18px auto;padding:16px}
-  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-  .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-2));display:flex;align-items:center;justify-content:center;color:white;font-weight:700}
-  h1{margin:0;font-size:18px}
-  p.lead{margin:0;color:var(--muted);font-size:13px}
-  .grid{display:grid;grid-template-columns:1fr 380px;gap:16px}
-  .card{background:var(--card);border-radius:var(--radius);padding:var(--pad);box-shadow:var(--shadow)}
-  .camera-wrap{position:relative;overflow:hidden;border-radius:10px;background:#000;min-height:300px;display:flex;align-items:center;justify-content:center}
-  video#video{width:100%;height:auto;object-fit:cover}
-  canvas#overlay{position:absolute;left:0;top:0;pointer-events:none}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
-  select,input[type=number]{border-radius:10px;border:1px solid #e6eef8;padding:9px;background:var(--glass);font-size:14px}
-  button{background:linear-gradient(180deg,var(--accent),var(--accent-2));color:#fff;border:0;padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 6px 16px rgba(3,105,161,0.12)}
-  button.ghost{background:transparent;color:var(--accent-2);border:1px solid #d6ecf1;box-shadow:none}
-  .muted{color:var(--muted);font-size:13px}
-  .counts{font-family:monospace;font-size:13px;color:#0b2b3b;overflow:auto;max-height:120px}
-  .preview-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-  .thumb{width:64px;height:64px;border-radius:8px;object-fit:cover;border:1px solid #e9f2f7}
-  footer.note{margin-top:12px;color:var(--muted);font-size:13px}
-  @media(max-width:920px){.grid{grid-template-columns:1fr}.camera-wrap{min-height:260px}}
-  .modal-back{position:fixed;inset:0;background:rgba(8,12,20,0.45);display:flex;align-items:center;justify-content:center;z-index:1200}
-  .modal{width:92%;max-width:720px;background:#fff;border-radius:12px;padding:18px;box-shadow:0 18px 40px rgba(3,16,32,0.18)}
-  .tile{width:84px;height:84px;border-radius:8px;background:#f6fbff;display:flex;align-items:center;justify-content:center;font-weight:700;color:#083344}
-  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:1300;pointer-events:none}
-  .toast-item{background:rgba(6,30,37,0.95);color:#fff;padding:10px 14px;border-radius:10px;margin-top:8px;box-shadow:0 6px 18px rgba(3,16,32,0.2);opacity:0;transform:translateY(8px);transition:all .28s ease;pointer-events:auto}
-  .toast-item.show{opacity:1;transform:translateY(0)}
-  .debug-badge{position:fixed;right:18px;top:18px;background:#0ea5a0;color:white;padding:8px 10px;border-radius:10px;box-shadow:0 6px 18px rgba(3,16,32,0.18);z-index:1400;font-weight:700}
+body{font-family:Arial, sans-serif;background:#f2f2f2;margin:0;padding:0;text-align:center}
+#videoEl{width:320px;height:240px;border:1px solid #aaa;margin:10px}
+button{margin:4px;padding:8px 12px;border:none;background:#1976d2;color:white;border-radius:5px}
+#logs{font-size:12px;max-height:100px;overflow-y:auto;background:#fff;padding:5px;border:1px solid #ddd;width:90%;margin:10px auto;text-align:left}
+#progress{width:80%;margin:auto}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:20px;opacity:0;transition:.4s}
+.toast.show{opacity:1}
 </style>
+</head>
+<body>
+<h2>Traductor de Lengua de Señas Colombiana</h2>
 
-<!-- librerías -->
+<!-- 🔘 Nuevo botón para iniciar la cámara -->
+<button id="startBtn">🎥 Iniciar cámara</button><br>
+
+<video id="videoEl" autoplay muted playsinline></video><br>
+
+<!-- Botones de control -->
+<button id="captureBtn" disabled>Capturar muestra</button>
+<button id="trainBtn" disabled>Entrenar</button>
+<button id="predictBtn" disabled>Predicción</button>
+<button id="saveModelBtn" disabled>Guardar modelo</button>
+<button id="loadModelBtn">Cargar modelo</button>
+<button id="exportDataBtn">Exportar dataset</button>
+<input type="file" id="importDataInput" accept=".json" hidden>
+<button id="importDataBtn">Importar dataset</button>
+<div id="progress"></div>
+<div id="logs"></div>
+<div id="toast" class="toast"></div>
+
+<!-- Librerías necesarias -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-</head>
 
-<body>
-<div class="app">
-  <header>
-    <div style="display:flex;gap:12px;align-items:center">
-      <div class="logo">LS</div>
-      <div>
-        <h1>Traductor LSC — alfabeto</h1>
-        <p class="lead">Entrena y prueba desde tu móvil</p>
-      </div>
-    </div>
-    <div class="muted">Debug activo • HTTPS requerido</div>
-  </header>
+<script>
+let samples=[],labels=[],model,lastVector,hands,camera;
+const log=t=>{logs.innerHTML+=t+'<br>';logs.scrollTop=logs.scrollHeight;}
+const showToast=t=>{toast.textContent=t;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2500);}
 
-  <div class="grid">
-    <div>
-      <div class="card">
-        <div class="camera-wrap">
-          <video id="video" autoplay playsinline muted></video>
-          <canvas id="overlay"></canvas>
-        </div>
+// Inicializa MediaPipe Hands
+hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.6,minTrackingConfidence:.6});
+hands.onResults(draw);
 
-        <div class="controls">
-          <label class="muted">Clase</label>
-          <select id="letter"></select>
-          <label class="muted">Mín muestras</label>
-          <input id="minSamples" type="number" value="20" min="1" style="width:86px" />
-          <button id="captureSample" disabled>Capturar</button>
-          <button id="trainBtn" disabled>Entrenar</button>
-          <button id="predictBtn" disabled>Probar</button>
-          <button id="realtimeToggle" class="ghost" disabled>Real-time</button>
-        </div>
+// 🚀 Se iniciará la cámara solo al presionar el botón
+document.getElementById('startBtn').onclick=()=>{
+  if(camera){showToast('La cámara ya está activa');return;}
+  camera=new Camera(videoEl,{
+    onFrame:async()=>{await hands.send({image:videoEl});},
+    width:640,height:480
+  });
+  camera.start();
+  document.getElementById('captureBtn').disabled=false;
+  document.getElementById('trainBtn').disabled=false;
+  document.getElementById('predictBtn').disabled=false;
+  showToast('Cámara iniciada correctamente');
+  log('Cámara activa ✔️');
+};
 
-        <div style="display:flex;gap:10px;margin-top:10px">
-          <button id="saveModelBtn" class="ghost" disabled>Guardar</button>
-          <button id="loadModelBtn" class="ghost">Cargar</button>
-          <button id="exportDataBtn" class="ghost">Exportar</button>
-          <button id="importDataBtn" class="ghost">Importar</button>
-          <button id="clearDataBtn" class="ghost">Borrar</button>
-          <input type="file" id="importFile" style="display:none" accept="application/json" />
-        </div>
-
-        <div style="margin-top:12px" class="muted">
-          <span id="log">Pulsa “Comenzar” para activar la cámara.</span>
-          <div id="progress" style="margin-top:6px"></div>
-        </div>
-      </div>
-    </div>
-
-    <aside class="side">
-      <div class="card">
-        <strong>Conteos por clase</strong>
-        <div id="counts" class="counts" style="margin-top:8px">--</div>
-        <div style="margin-top:8px"><strong>Preview</strong>
-          <div id="preview" class="preview-grid"></div>
-        </div>
-      </div>
-
-      <div class="card"><strong>Predicción:</strong> <span id="predText">—</span></div>
-    </aside>
-  </div>
-</div>
-
-<div id="toast"></div>
-<div id="debugBadge" class="debug-badge" style="display:none">JS iniciado ✔</div>
-
-<script type="module">
-const letters = Array.from({length:26},(_,i)=>String.fromCharCode(65+i));
-const sel=document.getElementById('letter'); letters.forEach(l=>sel.append(new Option(l,l)));
-const v=document.getElementById('video'), o=document.getElementById('overlay'), c=o.getContext('2d');
-let samples={}; letters.forEach(l=>samples[l]=[]);
-let model=null, lastVector=null, realtime=false;
-const log=t=>{document.getElementById('log').innerText=t;console.log('[LSC]',t)};
-const toastRoot=document.getElementById('toast');
-function showToast(t,ms=1600){if(toastRoot.children.length>3)toastRoot.removeChild(toastRoot.firstChild);
-  const d=document.createElement('div');d.className='toast-item';d.innerText=t;toastRoot.append(d);
-  requestAnimationFrame(()=>d.classList.add('show'));setTimeout(()=>{d.classList.remove('show');setTimeout(()=>d.remove(),300)},ms);}
-document.getElementById('debugBadge').style.display='block';
-
-/* ====== MEDIAPIPE ====== */
-const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-hands.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:0.6,minTrackingConfidence:0.6});
-hands.onResults(r=>{const m=r.multiHandLandmarks||[];draw(m);lastVector=norm(m);});
-const cam=new Camera(v,{onFrame:async()=>{await hands.send({image:v});},width:640,height:480});
-cam.start().then(()=>{showToast('Cámara lista');['captureSample','trainBtn','predictBtn','realtimeToggle'].forEach(id=>document.getElementById(id).disabled=false);});
-
-function draw(m){o.width=v.videoWidth||640;o.height=v.videoHeight||480;c.clearRect(0,0,o.width,o.height);
-  c.fillStyle='rgba(14,165,160,0.9)';
-  m.forEach(h=>h.forEach(p=>{c.beginPath();c.arc(p.x*o.width,p.y*o.height,6,0,Math.PI*2);c.fill();}));
+// Normalización
+function norm(lm){
+  const x=lm.map(p=>p.x),y=lm.map(p=>p.y);
+  const cx=(Math.min(...x)+Math.max(...x))/2,cy=(Math.min(...y)+Math.max(...y))/2;
+  const tmp=[];for(let i=0;i<lm.length;i++){tmp.push(lm[i].x-cx);tmp.push(lm[i].y-cy);}
+  const scale=Math.max(1e-6,Math.max(...tmp.map(Math.abs)));
+  const res=[];res.push(...tmp.map(v=>v/scale));return res;
 }
 
-/* ✅ CORRECCIÓN 1: normalización robusta */
-function norm(m){if(!m.length)return null;
-  const arr=m.slice().sort((a,b)=>a[0].x-b[0].x);const res=[];
-  for(let h=0;h<2;h++){const hand=arr[h];if(!hand){res.push(...Array(63).fill(0));continue;}
-    const base=hand[0];let tmp=[];hand.forEach(p=>tmp.push(p.x-base.x,p.y-base.y,p.z-base.z));
-    const scale=Math.max(1e-6,Math.max(...tmp.map(Math.abs))); // evita división por cero
-    res.push(...tmp.map(v=>v/scale));}
-  return Float32Array.from(res);
+// Dibuja resultados
+function draw(results){
+  if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
+    const v=norm(results.multiHandLandmarks[0]);lastVector=v;
+  }
 }
 
-/* CAPTURA */
-document.getElementById('captureSample').onclick=()=>{
-  if(!lastVector){log('No se detectó mano');return;}
-  const L=sel.value;samples[L].push(Array.from(lastVector));
-  document.getElementById('counts').innerText=letters.map(l=>`${l}:${samples[l].length}`).join(' | ');
-  showToast(`Muestra capturada ${L}`);
-};
+// Captura muestra
+captureBtn.onclick=()=>{
+  if(!lastVector){showToast('No hay mano detectada');return;}
+  const lbl=prompt('Etiqueta para esta seña (ej: A, B, Hola):');
+  if(!lbl)return;
+  samples.push(lastVector);labels.push(lbl);
+  log(`Capturada muestra (${lbl})`);
+  showToast('Muestra guardada');
+}
 
-/* ENTRENAR */
-document.getElementById('trainBtn').onclick=async()=>{
-  let xs=[],ys=[];letters.forEach((l,i)=>samples[l].forEach(v=>{xs.push(v);ys.push(i);}));
-  if(xs.length===0)return alert('No hay datos');
-  const X=tf.tensor2d(xs);const Y=tf.oneHot(tf.tensor1d(ys,'int32'),letters.length);
-  model=tf.sequential({layers:[
-    tf.layers.dense({units:128,activation:'relu',inputShape:[xs[0].length]}),
-    tf.layers.dropout({rate:0.25}),
-    tf.layers.dense({units:64,activation:'relu'}),
-    tf.layers.dense({units:letters.length,activation:'softmax'})
-  ]});
-  model.compile({optimizer:'adam',loss:'categoricalCrossentropy',metrics:['accuracy']});
-  log('Entrenando...');
-  await model.fit(X,Y,{epochs:20,batchSize:32,shuffle:true,
-    callbacks:{onEpochEnd:(e,l)=>{document.getElementById('progress').innerText=
-      `Epoch ${e+1}: loss=${l.loss.toFixed(3)} acc=${(l.acc||l.accuracy||0).toFixed(3)}`;}});
-  showToast('Entrenamiento finalizado');log('Modelo listo');
-  document.getElementById('saveModelBtn').disabled=false; // ✅ habilitar guardar
-};
+// Entrenamiento
+trainBtn.onclick=async()=>{
+  if(samples.length<2){showToast('Necesitas más muestras');return;}
+  const lbls=[...new Set(labels)],Y=labels.map(l=>lbls.indexOf(l));
+  const X=tf.tensor2d(samples),y=tf.oneHot(tf.tensor1d(Y,'int32'),lbls.length);
+  model=tf.sequential();
+  model.add(tf.layers.dense({units:64,activation:'relu',inputShape:[X.shape[1]]}));
+  model.add(tf.layers.dense({units:32,activation:'relu'}));
+  model.add(tf.layers.dense({units:lbls.length,activation:'softmax'}));
+  model.compile({optimizer:'adam',loss:'categoricalCrossentropy',metrics:['acc']});
+  showToast('Entrenando...');
+  await model.fit(X,y,{epochs:30,callbacks:{onEpochEnd:(e,l)=>{progress.innerHTML=`Época ${e+1}/30 - Precisión: ${(l.acc*100).toFixed(1)}%`;}}});
+  showToast('Entrenamiento finalizado');
+  log('Modelo listo ✅');
+  document.getElementById('saveModelBtn').disabled=false;
+}
 
-/* PREDICCIÓN */
-document.getElementById('predictBtn').onclick=()=>{
-  if(!model||!lastVector)return;
-  const p=model.predict(tf.tensor2d([Array.from(lastVector)])).arraySync()[0];
-  const i=p.indexOf(Math.max(...p));document.getElementById('predText').innerText=letters[i];
+// Predicción
+predictBtn.onclick=()=>{
+  if(!model){showToast('Primero entrena o carga un modelo');return;}
+  showToast('Predicción iniciada');
+  loopPred();
 };
-document.getElementById('realtimeToggle').onclick=()=>{
-  realtime=!realtime;showToast(realtime?'Real-time ON':'Real-time OFF');
-  if(realtime)loopPred();
-};
-async function loopPred(){if(!realtime)return;await tf.nextFrame();
-  if(model&&lastVector){const p=model.predict(tf.tensor2d([Array.from(lastVector)])).arraySync()[0];
-  const i=p.indexOf(Math.max(...p));document.getElementById('predText').innerText=letters[i];}
-  requestAnimationFrame(loopPred);}
+function loopPred(){
+  if(lastVector && model){
+    const p=model.predict(tf.tensor2d([Array.from(lastVector)])).arraySync()[0];
+    const lbl=[...new Set(labels)][p.indexOf(Math.max(...p))];
+    progress.innerHTML=`Predicción: <b>${lbl}</b>`;
+  }
+  requestAnimationFrame(loopPred);
+}
 
-/* ✅ CORRECCIÓN 2 y 3: Guardar/Cargar modelo de forma estable */
-document.getElementById('saveModelBtn').onclick=async()=>{
-  if(!model)return alert('No hay modelo para guardar');
-  try{
-    await model.save('indexeddb://lsc-model');
-    showToast('Modelo guardado en navegador');
-  }catch(e){console.error(e);alert('Error al guardar el modelo');}
+// Guardar y cargar modelo
+saveModelBtn.onclick=async()=>{
+  if(model){await model.save('indexeddb://lsc-model');showToast('Modelo guardado');}
 };
-
-document.getElementById('loadModelBtn').onclick=async()=>{
+loadModelBtn.onclick=async()=>{
   try{
     model=await tf.loadLayersModel('indexeddb://lsc-model');
-    showToast('Modelo cargado desde navegador');
-    document.getElementById('saveModelBtn').disabled=false;
-  }catch(e){
-    alert('No se encontró modelo guardado en el navegador');
-  }
+    showToast('Modelo cargado');
+    document.getElementById('predictBtn').disabled=false;
+  }catch(e){showToast('No hay modelo guardado');}
 };
 
-/* EXPORTAR / IMPORTAR */
-document.getElementById('exportDataBtn').onclick=()=>{
-  const blob=new Blob([JSON.stringify(samples)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='datos-lsc.json';a.click();
+// Exportar / importar dataset
+exportDataBtn.onclick=()=>{
+  const blob=new Blob([JSON.stringify({samples,labels})],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dataset.json';a.click();
 };
-document.getElementById('importDataBtn').onclick=()=>document.getElementById('importFile').click();
-document.getElementById('importFile').onchange=e=>{
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();reader.onload=()=>{samples=JSON.parse(reader.result);showToast('Datos importados');};
-  reader.readAsText(file);
+importDataBtn.onclick=()=>importDataInput.click();
+importDataInput.onchange=e=>{
+  const file=e.target.files[0];
+  if(file){
+    const r=new FileReader();
+    r.onload=()=>{
+      const d=JSON.parse(r.result);
+      samples=d.samples;labels=d.labels;
+      showToast('Dataset importado');
+      log('Dataset cargado');
+    };
+    r.readAsText(file);
+  }
 };
-document.getElementById('clearDataBtn').onclick=()=>{if(confirm('¿Borrar todos los datos?')){letters.forEach(l=>samples[l]=[]);showToast('Datos borrados');}};
 </script>
 </body>
 </html>
