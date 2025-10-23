@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Traductor LSC - WebApp</title>
+<title>Traductor LSC - Cámara trasera</title>
 <style>
 body{font-family:Arial, sans-serif;background:#f2f2f2;margin:0;padding:0;text-align:center}
-#videoEl{width:320px;height:240px;border:1px solid #aaa;margin:10px}
+#videoEl{width:320px;height:240px;border:1px solid #aaa;margin:10px;background:#000}
 button{margin:4px;padding:8px 12px;border:none;background:#1976d2;color:white;border-radius:5px}
 #logs{font-size:12px;max-height:100px;overflow-y:auto;background:#fff;padding:5px;border:1px solid #ddd;width:90%;margin:10px auto;text-align:left}
 #progress{width:80%;margin:auto}
@@ -17,8 +17,8 @@ button{margin:4px;padding:8px 12px;border:none;background:#1976d2;color:white;bo
 <body>
 <h2>Traductor de Lengua de Señas Colombiana</h2>
 
-<!-- 🔘 Nuevo botón para iniciar la cámara -->
-<button id="startBtn">🎥 Iniciar cámara</button><br>
+<!-- 🔘 Botón para iniciar la cámara trasera -->
+<button id="startBtn">🎥 Iniciar cámara trasera</button><br>
 
 <video id="videoEl" autoplay muted playsinline></video><br>
 
@@ -38,10 +38,9 @@ button{margin:4px;padding:8px 12px;border:none;background:#1976d2;color:white;bo
 <!-- Librerías necesarias -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-let samples=[],labels=[],model,lastVector,hands,camera;
+let samples=[],labels=[],model,lastVector,hands,stream;
 const log=t=>{logs.innerHTML+=t+'<br>';logs.scrollTop=logs.scrollHeight;}
 const showToast=t=>{toast.textContent=t;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),2500);}
 
@@ -50,38 +49,69 @@ hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands/${
 hands.setOptions({maxNumHands:1,modelComplexity:1,minDetectionConfidence:.6,minTrackingConfidence:.6});
 hands.onResults(draw);
 
-// 🚀 Se iniciará la cámara solo al presionar el botón
-document.getElementById('startBtn').onclick=()=>{
-  if(camera){showToast('La cámara ya está activa');return;}
-  camera=new Camera(videoEl,{
-    onFrame:async()=>{await hands.send({image:videoEl});},
-    width:640,height:480
-  });
-  camera.start();
-  document.getElementById('captureBtn').disabled=false;
-  document.getElementById('trainBtn').disabled=false;
-  document.getElementById('predictBtn').disabled=false;
-  showToast('Cámara iniciada correctamente');
-  log('Cámara activa ✔️');
+// 🚀 Iniciar cámara trasera
+document.getElementById('startBtn').onclick=async()=>{
+  try {
+    if (stream) { showToast('La cámara ya está activa'); return; }
+
+    // Intentar cámara trasera (environment)
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { exact: "environment" } }, audio: false
+    });
+    videoEl.srcObject = stream;
+    await videoEl.play();
+
+    // Inicia análisis de frames
+    loopFrame();
+
+    document.getElementById('captureBtn').disabled = false;
+    document.getElementById('trainBtn').disabled = false;
+    document.getElementById('predictBtn').disabled = false;
+    showToast('Cámara trasera iniciada');
+    log('Cámara trasera activa ✔️');
+  } catch (err) {
+    console.error(err);
+    showToast('No se pudo acceder a la cámara trasera. Usando la cámara disponible.');
+    // Si falla, intentar con la cámara por defecto
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      videoEl.srcObject = stream;
+      await videoEl.play();
+      loopFrame();
+      document.getElementById('captureBtn').disabled = false;
+      document.getElementById('trainBtn').disabled = false;
+      document.getElementById('predictBtn').disabled = false;
+      log('Cámara iniciada (fallback)');
+    } catch (e2) {
+      showToast('No se pudo acceder a ninguna cámara.');
+    }
+  }
 };
 
-// Normalización
+// Bucle de análisis
+async function loopFrame(){
+  if(!videoEl.videoWidth)return requestAnimationFrame(loopFrame);
+  await hands.send({image:videoEl});
+  requestAnimationFrame(loopFrame);
+}
+
+// Normalización de coordenadas
 function norm(lm){
   const x=lm.map(p=>p.x),y=lm.map(p=>p.y);
   const cx=(Math.min(...x)+Math.max(...x))/2,cy=(Math.min(...y)+Math.max(...y))/2;
   const tmp=[];for(let i=0;i<lm.length;i++){tmp.push(lm[i].x-cx);tmp.push(lm[i].y-cy);}
   const scale=Math.max(1e-6,Math.max(...tmp.map(Math.abs)));
-  const res=[];res.push(...tmp.map(v=>v/scale));return res;
+  return tmp.map(v=>v/scale);
 }
 
-// Dibuja resultados
+// Captura la posición de la mano
 function draw(results){
   if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
-    const v=norm(results.multiHandLandmarks[0]);lastVector=v;
+    lastVector = norm(results.multiHandLandmarks[0]);
   }
 }
 
-// Captura muestra
+// Capturar muestra
 captureBtn.onclick=()=>{
   if(!lastVector){showToast('No hay mano detectada');return;}
   const lbl=prompt('Etiqueta para esta seña (ej: A, B, Hola):');
@@ -89,9 +119,9 @@ captureBtn.onclick=()=>{
   samples.push(lastVector);labels.push(lbl);
   log(`Capturada muestra (${lbl})`);
   showToast('Muestra guardada');
-}
+};
 
-// Entrenamiento
+// Entrenar modelo
 trainBtn.onclick=async()=>{
   if(samples.length<2){showToast('Necesitas más muestras');return;}
   const lbls=[...new Set(labels)],Y=labels.map(l=>lbls.indexOf(l));
@@ -106,9 +136,9 @@ trainBtn.onclick=async()=>{
   showToast('Entrenamiento finalizado');
   log('Modelo listo ✅');
   document.getElementById('saveModelBtn').disabled=false;
-}
+};
 
-// Predicción
+// Predicción en tiempo real
 predictBtn.onclick=()=>{
   if(!model){showToast('Primero entrena o carga un modelo');return;}
   showToast('Predicción iniciada');
@@ -123,7 +153,7 @@ function loopPred(){
   requestAnimationFrame(loopPred);
 }
 
-// Guardar y cargar modelo
+// Guardar / Cargar modelo
 saveModelBtn.onclick=async()=>{
   if(model){await model.save('indexeddb://lsc-model');showToast('Modelo guardado');}
 };
